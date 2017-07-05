@@ -1,10 +1,9 @@
-/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global assert, describe, it, beforeEach, afterEach, */ // license: MPL-2.0
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global require, assert, describe, it, beforeEach, afterEach, */ // license: MPL-2.0
 
 describe('A Port should', () => {
-	const Port = require('../port.js');
+	const Port = require('../');
 
 	const { PassThrough, } = require('stream');
-	const { async, } = require('../concurrent.js');
 
 	let port;
 
@@ -38,13 +37,13 @@ describe('A Port should', () => {
 		port.post('foo', 1, 2, 3);
 	});
 
-	it('process requests', async(function*() {
+	it('process requests', async () => {
 		port.addHandler('foo', (_1, _2, _3) => _1 + _2 + _3);
-		(yield port.request('foo', 1, 2, 3).should.eventually.equal(1 + 2 + 3));
-	}));
+		(await port.request('foo', 1, 2, 3).should.eventually.equal(1 + 2 + 3));
+	});
 
-	it('report errors from requests', async(function*() {
+	it('report errors from requests', async () => {
 		port.addHandler('foo', () => { throw new TypeError; });
-		(yield port.request('foo', 1, 2, 3).then(_=>null, _=>_).should.eventually.be.instanceof(TypeError));
-	}));
+		(await port.request('foo', 1, 2, 3).then(_=>null, _=>_).should.eventually.be.instanceof(TypeError));
+	});
 });

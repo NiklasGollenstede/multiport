@@ -1,26 +1,25 @@
 {
-	"name": "es6lib",
-	"description": "lib",
+	"name": "multiport",
+	"description": "High level RPC connection Ports wrapping around all kinds of JavaScript message channels",
 	"version": "0.0.1",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/NiklasGollenstede/es6lib"
+		"url": "https://github.com/NiklasGollenstede/multiport"
 	},
-	"dependencies": {
-	},
+	"dependencies": {},
 	"devDependencies": {
-		"chai": "^3.3.0",
-		"chai-as-promised": "^5.1.0",
-		"mocha": "^2.3.3",
+		"chai": "3.5.0",
+		"chai-as-promised": "5.3.0",
+		"mocha": "2.5.3",
 		"eslintrc": "NiklasGollenstede/eslintrc"
 	},
 	"scripts": {
 		"test": "mocha --require test/node",
-		"test-debug": "node-debug _mocha --debug --require test/node"
+		"lint": "eslint --ignore-path .gitignore ."
 	},
 	"eslintConfig": {
-		"extends": "./node_modules/eslintrc/web-ext.js"
+		"extends": "./node_modules/eslintrc/browser.js"
 	}
 }
