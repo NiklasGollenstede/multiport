@@ -291,7 +291,7 @@ Port.web_ext_Port = class web_ext_Port {
 		try {
 			this.port.postMessage([ name, id, args, ]); // throws if encoding any of the args throws, or if the port is disconnected:
 		} catch (error) { // firefox tends to not fire the onDisconnect event
-			// the port was unable to send an array of primitives ==> is is actually closed
+			// the port was unable to send an array of primitives ==> it is actually closed
 			// TODO: can it throw for other reasons (message to long, ...)?
 			console.error('Error in postMessage, closing Port:', error);
 			this.onDisconnect();
@@ -339,7 +339,7 @@ const Self = new WeakMap/*<Port, _Port>*/;
 function getPrivate(other) {
 	const self = Self.get(other);
 	if (!self) { throw new Error(`Port method used on invalid object`); }
-	if (!self.port) { throw new Error(`Can't use disconnected Port`); }
+	if (!self.public) { throw new Error(`Can't use disconnected Port`); }
 	return self;
 }
 
