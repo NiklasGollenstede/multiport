@@ -3,7 +3,7 @@
 	"description": "High level RPC connection Ports wrapping around all kinds of JavaScript message channels",
 	"version": "0.0.1",
 	"author": "Niklas Gollenstede",
-	"license": "MPL-2.0",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/NiklasGollenstede/multiport"
@@ -13,7 +13,9 @@
 		"chai": "3.5.0",
 		"chai-as-promised": "5.3.0",
 		"mocha": "2.5.3",
-		"eslintrc": "NiklasGollenstede/eslintrc"
+		"babel-eslint": "7.1.1",
+		"eslint": "3.14.1",
+		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
 	},
 	"scripts": {
 		"test": "mocha --require test/node",

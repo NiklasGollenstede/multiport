@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const factory = function es6lib_port(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_port(exports) { // license: MIT
 /* eslint-disable no-unused-vars */
 
 /**
@@ -96,12 +96,16 @@ const Port = class Port {
 		return getPrivate(this).post(...arguments);
 	}
 
+	afterEnded(/*name, ...args*/) {
+		return getPrivate(this).afterEnded(...arguments);
+	}
+
 	/**
 	 * Returns a frozen Promise that resolves when the Port gets .destroyed().
 	 */
 	get ended() {
 		const self = Self.get(this);
-		return self ? self.ended : Promise.resolve();
+		return self ? self.ended : null;
 	}
 
 	/**
@@ -287,7 +291,7 @@ Port.web_ext_Port = class web_ext_Port {
 		try {
 			this.port.postMessage([ name, id, args, ]); // throws if encoding any of the args throws, or if the port is disconnected:
 		} catch (error) { // firefox tends to not fire the onDisconnect event
-			// the port was unable so send an array of primitives ==> is is actually closed
+			// the port was unable to send an array of primitives ==> is is actually closed
 			// TODO: can it throw for other reasons (message to long, ...)?
 			console.error('Error in postMessage, closing Port:', error);
 			this.onDisconnect();
@@ -334,8 +338,9 @@ const Self = new WeakMap/*<Port, _Port>*/;
 
 function getPrivate(other) {
 	const self = Self.get(other);
-	if (self) { return self; }
-	throw new Error(`Can't use disconnected Port`);
+	if (!self) { throw new Error(`Port method used on invalid object`); }
+	if (!self.port) { throw new Error(`Can't use disconnected Port`); }
+	return self;
 }
 
 // private implementation class
@@ -348,6 +353,7 @@ class _Port {
 		this.lastId = 1; // `1` will never be used
 		this.cb2id = new WeakMap/*<function, id*/;
 		this.id2cb = new Map/*<id, function>*/;
+		this.endQueue = [ ];
 		this.ended = Object.freeze(new Promise(end => (this.onEnd = end)));
 		this._isRequest = 0; // -1: false; 0: throw; 1: true;
 		this.public = self;
@@ -414,14 +420,22 @@ class _Port {
 		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
 		this.port.send(name, 0, args.map(this.mapValue, this), options);
 	}
+	afterEnded(name, ...args) {
+		let options = null;
+		if (typeof name === 'object') {
+			options = name; name = args.shift();
+		}
+		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
+		this.port.send('', 0, [ 0, 1, name, args.map(this.mapValue, this), ], options);
+	}
 	mapValue(value) {
 		const isObject = typeof value === 'object' && value !== null;
 		if (isObject && ('' in value) && Object.getOwnPropertyDescriptor(value, '')) {
 			value = { '': 0, raw: value, };
 		} else if (typeof value === 'function') {
-			const id = this.cb2id.get(value) || this.nextId();
-			this.id2cb.set(id, value); this.cb2id.set(value, id);
-			value = { '': 1, cb: id, };
+			const callback = value, cbId = this.cb2id.get(callback) || getRandomId();
+			this.id2cb.set(cbId, callback); this.cb2id.set(callback, cbId);
+			value = { '': 1, cb: cbId, };
 		} else if (isObject && value.constructor && (/Error$/).test(value.constructor.name)) {
 			value = { '': 2, name: value.name+'', message: value.message+'', stack: value.stack+'', fileName: value.fileName, lineNumber: value.lineNumber, columnNumber: value.columnNumber,  };
 		}
@@ -431,16 +445,23 @@ class _Port {
 		if (typeof value !== 'object' || value === null || !('' in value)) { return value; }
 		switch (value['']) {
 			case 0: return value.raw;
-			case 1: return (...args) => {
-				if (!this.public) { throw new Error(`Remote callback connection is closed`); }
-				const id = this.nextId();
-				const promise = this.port.send('', 0, [ id, 0, value.cb, args.map(this.mapValue, this), ], null);
-				if (promise !== undefined) { return promise; }
-				const request = new PromiseCapability;
-				this.requests.set(id, request);
-				return request.promise;
-			};
-			case 2: return delete value[''] && Object.assign(Object.create((typeof global[value.name] === 'function' ? global[value.name] : Error)).prototype, value);
+			case 1: {
+				const cbId = value.cb, callback = this.id2cb.get(cbId) || ((...args) => {
+					if (!this.public) { throw new Error(`Remote callback connection is closed`); }
+					const id = this.nextId();
+					const promise = this.port.send('', 0, [ id, 0, cbId, args.map(this.mapValue, this), ], null);
+					if (promise !== undefined) { return promise; }
+					const request = new PromiseCapability;
+					this.requests.set(id, request);
+					return request.promise;
+				});
+				this.id2cb.set(cbId, callback); this.cb2id.set(callback, cbId);
+				return callback;
+			}
+			case 2: {
+				delete value['']; const error = new (typeof global[value.name] === 'function' ? global[value.name] : Error);
+				return Object.assign(error, value);
+			}
 			default: throw new TypeError(`Can't unmap argument`);
 		}
 	}
@@ -457,14 +478,14 @@ class _Port {
 	}
 	destroy() {
 		if (!this.public) { return; }
+		this.endQueue.forEach(([ name, args, ]) => this.onData(name, 0, args));
 		this.requests.forEach(_=>_.reject(new Error('The Port this request is waiting on was destroyed')));
 		this.requests.clear();
 		this.handlers.clear();
 		this.id2cb.clear();
 		this.onEnd();
 		try { this.port.destroy(); } catch (error) { console.error(error); }
-		Self.delete(this.public);
-		this.public = null;
+		this.public = this.port = null;
 	}
 
 	onData(name, id, args, altThis, reply, optional) {
@@ -478,6 +499,10 @@ class _Port {
 						if (!callback) { throw new Error(`Remote callback has been destroyed`); }
 						value = callback.apply(null, args[3].map(this.unmapValue, this));
 					} break;
+					case 1: { // end Queue
+						this.endQueue.push([ args[2], args[3], ]);
+						return false;
+					}
 					default: throw new Error(`Bad request`);
 				}
 			} else {
@@ -534,6 +559,10 @@ class _Port {
 		} }
 	}
 }
+
+const getRandomId = global.crypto
+? () => Array.from(global.crypto.getRandomValues(new Uint32Array(3)), _=>_.toString(32)).join('')
+: [ 0, 0, 0, ].map(() => Math.random().toString(32).slice(2)).join('');
 
 function PromiseCapability() {
 	this.promise = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; });
