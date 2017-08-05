@@ -1,204 +1,28 @@
 (function(global) { 'use strict'; const factory = function Multiport(exports) { // license: MIT
-/* eslint-disable no-unused-vars */
 
 /**
- * Wrapper class for browser WebSockets, node js Streams, web-extension runtime.Ports and similar ports,
- * to provide a more high level API with requests to named handlers and Promises to their replies.
+ * for documentation, see ./README.md or https://github.com/NiklasGollenstede/multiport/blob/master/README.md
  */
+
+// public interface class
 const Port = class Port {
+	constructor(port, Adapter) { new _Port(this, port, Adapter); }
 
-	/**
-	 * Takes one end of a communication channel and prepares it to send and receive requests.
-	 * @param  {any}     port     The low-level port object that is connected to the communication channel. Its only use is as the argument to `Adapter`.
-	 * @param  {class}   Adapter  A simple adapter class to provide a common interface for different types of low level ports.
-	 *                            This can ether be one of (for details see below)
-	 *                                Port.WebSocket        for  browser WebSockets,
-	 *                                Port.MessagePort      for  browser MessagePorts,
-	 *                                Port.node_Stream      for  node.js DuplexSteams,
-	 *                                Port.web_ext_Port     for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
-	 *                            or any other class that implements the PortAdapter interface.
-	 * @return {Port}             The new Port instance.
-	 */
-	constructor(port, Adapter) {
-		new _Port(this, port, Adapter);
-	}
+	addHandler () { getPrivate(this).addHandler (...arguments); return this; }
+	addHandlers() { getPrivate(this).addHandlers(...arguments); return this; }
+	removeHandler(name) {        getPrivate(this).removeHandler(name); return this; }
+	hasHandler   (name) { return getPrivate(this).hasHandler(name); }
 
-	/**
-	 * Adds a named message handler.
-	 * @param  {string}    name     Optional. Non-empty name of this handler, which can be used
-	 *                              by .request() and .post() to call this handler. Defaults to `handler`.name.
-	 * @param  {RegExp}    names    Optional, instead of explicit name. Name wildcard: Messages with names that are
-	 *                              not handled by a handler with a string name are handled by this handler if their name matches.
-	 *                              The first argument to the handler will be the actual name.
-	 * @param  {function}  handler  The handler function. It will be called with JSON-clones of all additional arguments
-	 *                              provided to .request() or .post() and may return a Promise to asynchronously return a value.
-	 * @param  {any}       thisArg  `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
-	 * @return {MessageHandler}     Self reference for chaining.
-	 * @throws {Error}              If a handler for `name` is already registered.
-	 */
-	addHandler(/*name, handler, thisArg*/) {
-		getPrivate(this).addHandler(...arguments);
-		return this;
-	}
+	request   () { return getPrivate(this).request   (...arguments); }
+	post      () { return getPrivate(this).post      (...arguments); }
+	afterEnded() { return getPrivate(this).afterEnded(...arguments); }
 
-	/**
-	 * Adds multiple named message handlers.
-	 * @param  {string}        prefix    Optional prefix to prepend to all handler names specified in `handlers`.
-	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are not functions are ignored.
-	 * @param  {any}           thisArg   `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
-	 * @return {MessageHandler}          Self reference for chaining.
-	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
-	 */
-	addHandlers(/*prefix, handlers, thisArg*/) {
-		getPrivate(this).addHandlers(...arguments);
-		return this;
-	}
-
-	/**
-	 * Removes a named handler.
-	 * @param  {string|RegExp}   name  The name of the handler to be removed.
-	 * @return {MessageHandler}        Self reference for chaining.
-	 */
-	removeHandler(name) {
-		getPrivate(this).removeHandler(name);
-		return this;
-	}
-
-	/**
-	 * Queries the existence of a named handler.
-	 * @param  {string|RegExp}  name  The name of the handler to query.
-	 * @return {bool}                 `true` iff a handler is listening on this port.
-	 */
-	hasHandler(name) {
-		return getPrivate(this).hasHandler(name);
-	}
-
-	/**
-	 * Calls a handler on the other end of this port and returns a Promise to its return value.
-	 * @param  {object}  options  Optional, may be omitted. If specified, it will be passed as 4th argument to PortAdapter.send().
-	 * @param  {string}  name     Name of the remote handler to call.
-	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
-	 * @return {Promise}          Promise that rejects if the request wasn't handled or if the handler threw
-	 *                            and otherwise resolves to the handlers return value.
-	 */
-	request(/*name, ...args*/) {
-		return getPrivate(this).request(...arguments);
-	}
-
-	/**
-	 * Calls a handler on the other end of this port without waiting for its return value and without guarantee that a handler has in fact been called.
-	 * @param  {object}  options  Optional, may be omitted. If specified, it will be passed as 4th argument to PortAdapter.send().
-	 * @param  {string}  name     Name of the remote handler to call.
-	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
-	 */
-	post(/*name, ...args*/) {
-		return getPrivate(this).post(...arguments);
-	}
-
-	afterEnded(/*name, ...args*/) {
-		return getPrivate(this).afterEnded(...arguments);
-	}
-
-	/**
-	 * While the port is open, returns a frozen Promise that resolves when the Port gets .destroyed().
-	 * After the port is closed, it returns `true` directly.
-	 */
-	get ended() {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Port method used on invalid object`); }
-		return self.public ? self.ended : true;
-	}
-
-	/**
-	 * Tells whether the currently synchronously handled message is a request or post.
-	 * @return {boolean}  If false, the current handler is called by a remote .post(), i.e. the return value of the handler is not used.
-	 * @throws {Error}    If this Port is not currently in a synchronous call to a handler.
-	 */
-	isRequest() {
-		return getPrivate(this).isRequest();
-	}
-
-	releaseCallback(func) {
-		getPrivate(this).releaseCallback(func);
-		return this;
-	}
-
-	/**
-	 * Destroys the Port instance and the underlying PortAdapter.
-	 * Gets automatically called when the underlying port closes.
-	 * After the instance is destroyed, all other methods on this instance will throw.
-	 * Never throws and any further calls to .destroy() will be ignored.
-	 */
-	destroy() {
-		try {
-			const self = Self.get(this);
-			self && self.destroy();
-		} catch (error) { reportError(error); }
-	}
+	get ended() { const self = Self.get(this); if (!self) { throw new Error(`Port method used on invalid object`); } return self.ended; }
+	isRequest() { return getPrivate(this).isRequest(); }
+	releaseCallback(func) { getPrivate(this).releaseCallback(func); return this; }
+	destroy() { try { const self = Self.get(this); self && self.destroy(); } catch (error) { reportError(error); } }
 };
 
-/**
- * Details on the Provided PortAdapter implementations:
- *
- *     Port.WebSocket:        Wraps WebSockets.
- *                            Uses JSON encoding.
- *
- *     Port.MessagePort:      Wraps MessagePorts.
- *                            Calls .start().
- *                            NOTE: There is no 'close' event, the application must take care to close BOTH ends of the channel.
- *
- *     Port.node_Stream:      Wraps node.js DuplexSteams.
- *                            Uses JSON encoding, reads and writes UTF-8 strings.
- *                            Calls onEnd() from both 'end' and 'close' events.
- *                            Always sends asynchronously.
- *
- *     Port.web_ext_Port:     Wraps (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
- *
- */
-
-/**
- * Interface class that can be implemented to provide compatibility for low level ports that don't work with any of the predefined adapters.
- * The implementation can be freely chosen as long as the interface matches the specification below.
- */
-class PortAdapter {
-
-	/**
-	 * The constructor gets called with three arguments.
-	 * @param  {any}       port    The value that was passed as the first argument to the new Port() call where this class was the second argument.
-	 *                             Should be the low level port object.
-	 * @param  {function}  onData  Function that gets called exactly once for every call to .send() on the other end of the channel.
-	 *                             The first three arguments must be JSON clones of the [ name, id, args, ] arguments provided to .send().
-	 *                             The 4th argument may be an alternative value for `this` in the handler for this message,
-	 *                             which is used if the `thisArg` for the listener is == null.
-	 *                             The 5th argument may be a function that is used once instead of .send() to reply to this single message.
-	 *                             A trueisch value as 6th argument indicates that handling this message is optional, i.e. it doesn't get rejected if no handler is found.
-	 *                             Returns whether the reply function, if provided, will be called asynchronously.
-	 * @param  {function}  onEnd   Function that should be called at least once when the underlying port closes.
-	 * @return {object}            Any object with .send() and .destroy() methods as specified below.
-	 */
-	constructor(port, onData = (name, id, args) => { }, onEnd = () => { }) { }
-
-	/**
-	 * Needs to serialize and send it's arguments to make them available to the onData() callback on the other end of the channel.
-	 * @param  {string}   name     Arbitrary utf8 string.
-	 * @param  {number}   id       A 64-bit float.
-	 * @param  {Array}    args     Array of object that should be JSONable.
-	 * @param  {object}   options  The options object passed as the first argument to Port.send/post(), or null.
-	 * @return {Promise}           If the .send() function returns a value other than `undefined` it is assumed to be (a Promise to) the messages reply and is returned from port.request().
-	 */
-	send(name, id, args, options) { }
-
-	/**
-	 * Gets called exactly once when the Port object gets .destroy()ed.
-	 * Should close the underlying connection if it is still open.
-	 * Will be called during or after the onEnd() callback.
-	 * The call to .destroy() will be the last access of this object made by the Port instance that created it.
-	 */
-	destroy() { }
-}
-
-///////// start of private implementation /////////
-/* eslint-enable no-unused-vars */
 
 Port.WebSocket = class WebSocket {
 
@@ -443,9 +267,9 @@ class _Port {
 		this.requests.clear();
 		this.handlers.clear();
 		this.id2cb.clear();
-		this.onEnd(true);
+		this.onEnd(true); this.ended = true;
 		try { this.port.destroy(); } catch (error) { console.error(error); }
-		this.public = this.port = this.ended = null;
+		this.public = this.port = null;
 	}
 
 	onData(name, id, args, altThis, reply, optional) {
@@ -539,9 +363,7 @@ function isPromise(value) { try {
 } catch (_) { return false; } }
 const PromiseCtors = new WeakMap;
 
-const reportError =
-typeof console !== 'object' ? () => 0
-: function() { try { console.error.apply(console, arguments); } catch (_) { } };
+function reportError() { try { console.error.apply(console, arguments); } catch (_) { } }
 
 return Port;
 

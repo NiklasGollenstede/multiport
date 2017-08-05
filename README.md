@@ -192,8 +192,11 @@ class Port {
 
 ## Value mapping
 
-Multiport expects the PortAdapters and their underlying channels to be able to transmit all values that can be expressed in JSON. Further capabilities are up to the implementation of the PortAdapter.
-In addition to that, Multiport transparently performs some mapping before passing on values and unmapping before presenting them to the application on the other end. This affects direct function arguments and function return values. Nested values are not processed. Currently, the special value types are:
+Multiport expects the PortAdapters and their underlying channels to be able to transmit all values that can be expressed in JSON.
+Further capabilities are generally up to the implementation of the PortAdapter.
+In addition to that, Multiport transparently performs some mapping before sending values and unmapping before presenting them to the application on the other end.
+This affects direct function arguments and function return values. Nested values are not processed.\
+Currently, the special value types are:
 
 - `Error` objects: Error objects are JSONized as `{ }`, which is perfectly useless. Therefore, objects whose `.constructor.name` ends with `Error` are recreated as instances of the matching class in the target context (or `Error` if the specific class is not present) and their name, message, stack, fileName, lineNumber and columnNumber is set to the original values.
 - Functions: a stub function is passed to the handler / as the return value on the other end. All arguments and (asynchronous) return values are passed according to the normal rules described here. Sending the same function over the same Port in either direction multiple times will result in the same stub on the other end, calls to `.addEventListener()`/`.removeEventListener()` should work as expected. The only major drawback is that neither the stub nor the original function can be garbage-collected until the Port is destroyed.
