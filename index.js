@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const factory = function es6lib_port(exports) { // license: MIT
+(function(global) { 'use strict'; const factory = function Multiport(exports) { // license: MIT
 /* eslint-disable no-unused-vars */
 
 /**
@@ -16,7 +16,6 @@ const Port = class Port {
 	 *                                Port.MessagePort      for  browser MessagePorts,
 	 *                                Port.node_Stream      for  node.js DuplexSteams,
 	 *                                Port.web_ext_Port     for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
-	 *                                Port.web_ext_Runtime  for  browser.runtime/tabs.on/sendMessage API in Firefox extensions (in Chromium and Opera this needs to be Promise-wrapped),
 	 *                            or any other class that implements the PortAdapter interface.
 	 * @return {Port}             The new Port instance.
 	 */
@@ -35,7 +34,7 @@ const Port = class Port {
 	 *                              provided to .request() or .post() and may return a Promise to asynchronously return a value.
 	 * @param  {any}       thisArg  `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
 	 * @return {MessageHandler}     Self reference for chaining.
-	 * @throws {Error}              If there is already a handler registered for `name`.
+	 * @throws {Error}              If a handler for `name` is already registered.
 	 */
 	addHandler(/*name, handler, thisArg*/) {
 		getPrivate(this).addHandler(...arguments);
@@ -45,7 +44,7 @@ const Port = class Port {
 	/**
 	 * Adds multiple named message handlers.
 	 * @param  {string}        prefix    Optional prefix to prepend to all handler names specified in `handlers`.
-	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are no functions will be ignores.
+	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are not functions are ignored.
 	 * @param  {any}           thisArg   `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
 	 * @return {MessageHandler}          Self reference for chaining.
 	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
@@ -68,7 +67,7 @@ const Port = class Port {
 	/**
 	 * Queries the existence of a named handler.
 	 * @param  {string|RegExp}  name  The name of the handler to query.
-	 * @return {bool}                 true iff a handler is listening on this port.
+	 * @return {bool}                 `true` iff a handler is listening on this port.
 	 */
 	hasHandler(name) {
 		return getPrivate(this).hasHandler(name);
@@ -101,11 +100,13 @@ const Port = class Port {
 	}
 
 	/**
-	 * Returns a frozen Promise that resolves when the Port gets .destroyed().
+	 * While the port is open, returns a frozen Promise that resolves when the Port gets .destroyed().
+	 * After the port is closed, it returns `true` directly.
 	 */
 	get ended() {
 		const self = Self.get(this);
-		return self ? self.ended : null;
+		if (!self) { throw new Error(`Port method used on invalid object`); }
+		return self.public ? self.ended : true;
 	}
 
 	/**
@@ -153,14 +154,6 @@ const Port = class Port {
  *
  *     Port.web_ext_Port:     Wraps (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
  *
- *     Port.web_ext_Runtime:  Wraps the global browser/chrome api object in Chromium, Firefox and Opera extensions.
- *                            Listens for messages on api.runtime.onMessage and can
- *                            send messages via api.runtime.sendMessage and api.tabs.sendMessage, if available.
- *                            The `port` parameter to new Port() must be the `browser` global in Firefox
- *                            or a promisified version of the `chrome`/`browser` global in Chromium/Edge/Opera.
- *                            The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
- *                            The Port is never closed automatically.
- *                            If `thisArg` is == null, the `this` in the handler will be set to the messages `sender`.
  */
 
 /**
@@ -227,11 +220,6 @@ Port.WebSocket = class WebSocket {
 		this.port.close();
 	}
 };
-
-Port.web_Port = class extends Port.WebSocket { constructor() {
-	super(...arguments);
-	console.warn('The default Port.web_Port is deprecated, explicitly use Port.WebSocket instead');
-} };
 
 Port.MessagePort = class MessagePort {
 
@@ -302,34 +290,6 @@ Port.web_ext_Port = class web_ext_Port {
 		this.port.onMessage.removeListener(this.onMessage);
 		this.port.onDisconnect.removeListener(this.onDisconnect);
 		this.port.disconnect();
-	}
-};
-
-Port.web_ext_Runtime = class web_ext_Runtime {
-
-	constructor(api, onData) {
-		this.api = api; this.onData = onData;
-		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args), true);
-		this.sendMessage = api.runtime.sendMessage;
-		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
-		this.api.runtime.onMessage.addListener(this.onMessage);
-	}
-
-	send(name, id, args, tab) {
-		let promise;
-		if (tab !== null) {
-			const { tabId, frameId, } = tab;
-			promise = this.sendMessageTab(tabId, [ name, id, args, ], frameId != null ? { frameId, } : { });
-		} else {
-			promise = this.sendMessage([ name, id, args, ]);
-		}
-		if (id === 0) { return; } // is post
-		promise.then(value => this.onData('', id, value), error => this.onData('', -id, error));
-	}
-
-	destroy() {
-		this.api.runtime.onMessage.removeListener(this.onMessage);
-		this.api = this.onData = null;
 	}
 };
 
@@ -483,9 +443,9 @@ class _Port {
 		this.requests.clear();
 		this.handlers.clear();
 		this.id2cb.clear();
-		this.onEnd();
+		this.onEnd(true);
 		try { this.port.destroy(); } catch (error) { console.error(error); }
-		this.public = this.port = null;
+		this.public = this.port = this.ended = null;
 	}
 
 	onData(name, id, args, altThis, reply, optional) {
