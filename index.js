@@ -346,7 +346,7 @@ class _Port {
 
 const getRandomId = global.crypto
 ? () => Array.from(global.crypto.getRandomValues(new Uint32Array(3)), _=>_.toString(32)).join('')
-: [ 0, 0, 0, ].map(() => Math.random().toString(32).slice(2)).join('');
+: () => [ 0, 0, 0, ].map(() => Math.random().toString(32).slice(2)).join('');
 
 function PromiseCapability() {
 	this.promise = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; });
