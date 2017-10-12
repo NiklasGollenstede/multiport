@@ -8,14 +8,14 @@
 const Port = class Port {
 	constructor(port, Adapter) { new _Port(this, port, Adapter); }
 
-	addHandler () { getPrivate(this).addHandler (...arguments); return this; }
-	addHandlers() { getPrivate(this).addHandlers(...arguments); return this; }
+	addHandler () { methods.addHandler .apply(getPrivate(this), arguments); return this; }
+	addHandlers() { methods.addHandlers.apply(getPrivate(this), arguments); return this; }
 	removeHandler(name) {        getPrivate(this).removeHandler(name); return this; }
 	hasHandler   (name) { return getPrivate(this).hasHandler(name); }
 
-	request   () { return getPrivate(this).request   (...arguments); }
-	post      () { return getPrivate(this).post      (...arguments); }
-	afterEnded() { return getPrivate(this).afterEnded(...arguments); }
+	request   () { return methods.request   .apply(getPrivate(this), arguments); }
+	post      () { return methods.post      .apply(getPrivate(this), arguments); }
+	afterEnded() { return methods.afterEnded.apply(getPrivate(this), arguments); }
 
 	get ended() { const self = Self.get(this); if (!self) { throw new Error(`Port method used on invalid object`); } return self.ended; }
 	isRequest() { return getPrivate(this).isRequest(); }
@@ -221,7 +221,15 @@ class _Port {
 			this.id2cb.set(cbId, callback); this.cb2id.set(callback, cbId);
 			value = { '': 1, cb: cbId, };
 		} else if (isObject && value.constructor && (/Error$/).test(value.constructor.name)) {
-			value = { '': 2, name: value.name+'', message: value.message+'', stack: value.stack+'', fileName: value.fileName, lineNumber: value.lineNumber, columnNumber: value.columnNumber,  };
+			value = { '': 2,
+				name: value.name+'', message: value.message+'', stack: value.stack+'', // ~standard
+				code: typeof value.code === 'number' || typeof value.code === 'string' ? value.code : undefined, // node.js
+				status: typeof value.status === 'number' || typeof value.status === 'string' ? value.status : undefined, // http server
+				expose: typeof value.expose === 'boolean' ? value.expose : undefined, // http server
+				fileName: typeof value.fileName === 'string' ? value.fileName : undefined, // gecko
+				lineNumber: typeof value.lineNumber === 'number' ? value.lineNumber : undefined, // gecko
+				columnNumber: typeof value.columnNumber === 'number' ? value.columnNumber : undefined, // gecko
+			};
 		}
 		return value;
 	}
@@ -343,6 +351,7 @@ class _Port {
 		} }
 	}
 }
+const methods = _Port.prototype;
 
 const getRandomId = global.crypto
 ? () => Array.from(global.crypto.getRandomValues(new Uint32Array(3)), _=>_.toString(32)).join('')
