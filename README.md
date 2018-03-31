@@ -151,18 +151,19 @@ class Port {
 	/**
 	 * Experimental. Calls a handler on the other end with the specified arguments
 	 * after the underlying connection was closed, right before `.ended` resolves.
-	 * Has the same arguments and semantics as `.post()` Can for example be used to release resources.
+	 * Has the same arguments and semantics as `.post()`. Can for example be used to release resources.
 	 */
 	afterEnded(name, ...args) {
 		this.ended.then(() => other.handlers[name](...args));
 	}
 
 	/**
-	 * While the port is open, returns a frozen Promise that resolves when the Port gets .destroyed().
-	 * After the port is closed, it returns `true` directly.
+	 * While the port is open, returns a frozen Promise that resolves
+	 * with an optional reason when the Port gets `.destroy()`ed.
+	 * After the port is closed, it returns `true`.
 	 */
 	get ended() {
-		return this.connection.closed ? true : Promise(true);
+		return this.connection.closed ? true : Promise(reason);
 	}
 
 	/**
@@ -184,9 +185,10 @@ class Port {
 	 * Destroys the Port instance and the underlying PortAdapter.
 	 * Gets automatically called when the underlying port closes.
 	 * After the instance is destroyed, all other methods on this instance will throw.
-	 * Never throws and any further calls to .destroy() will be ignored.
+	 * Never throws and any further calls to `.destroy()` will be ignored.
+	 * @param  {object?}  reason  Optional disconnect reason (object or null).
 	 */
-	destroy() { !this.connection.closed && this.connection.close(); }
+	destroy(reason) { this.ended.resolve(reason); this.connection.close(); }
 }
 ```
 

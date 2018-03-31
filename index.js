@@ -20,7 +20,7 @@ const Port = class Port {
 	get ended() { const self = Self.get(this); if (!self) { throw new Error(`Port method used on invalid object`); } return self.ended; }
 	isRequest() { return getPrivate(this).isRequest(); }
 	releaseCallback(func) { getPrivate(this).releaseCallback(func); return this; }
-	destroy() { try { const self = Self.get(this); self && self.destroy(); } catch (error) { reportError(error); } }
+	destroy(reason) { try { const self = Self.get(this); self && self.destroy(reason); } catch (error) { reportError(error); } }
 };
 
 
@@ -29,7 +29,7 @@ Port.WebSocket = class WebSocket {
 	constructor(port, onData, onEnd) {
 		this.port = port;
 		this.onMessage = ({ data, }) => { data = JSON.parse(data); onData(data[0], data[1], data[2]); };
-		this.onClose = () => onEnd();
+		this.onClose = onEnd; // with CloseEvent
 		this.port.addEventListener('message', this.onMessage);
 		this.port.addEventListener('close', this.onClose);
 	}
@@ -52,6 +52,7 @@ Port.MessagePort = class MessagePort {
 		this.onMessage = ({ data, }) => onData(data[0], data[1], data[2]);
 		this.port.addEventListener('message', this.onMessage);
 		this.port.start();
+		// there is no close/end/... event
 	}
 
 	send(name, id, args) {
@@ -69,10 +70,12 @@ Port.node_Stream = class node_Stream {
 	constructor(port, onData, onEnd) {
 		this.port = port;
 		this.onData = data => { data = JSON.parse(data.toString('utf8')); onData(data[0], data[1], data[2]); };
-		this.onEnd = () => onEnd();
+		this.onEnd = onEnd;
 		port.on('data', this.onData);
-		port.once('end', this.onEnd);
+		port.once('error', this.onEnd);
+		port.once('finish', this.onEnd);
 		port.once('close', this.onEnd);
+		port.once('end', this.onEnd);
 	}
 
 	send(name, id, args) {
@@ -82,8 +85,10 @@ Port.node_Stream = class node_Stream {
 
 	destroy() {
 		this.port.removeListener('data', this.onData);
-		this.port.removeListener('end', this.onEnd);
+		this.port.removeListener('error', this.onEnd);
+		this.port.removeListener('finish', this.onEnd);
 		this.port.removeListener('close', this.onEnd);
+		this.port.removeListener('end', this.onEnd);
 		this.port.end();
 	}
 };
@@ -93,7 +98,7 @@ Port.web_ext_Port = class web_ext_Port {
 	constructor(port, onData, onEnd) {
 		this.port = port;
 		this.onMessage = data => onData(data[0], data[1], JSON.parse(data[2]));
-		this.onDisconnect = () => onEnd();
+		this.onDisconnect = () => onEnd(port.error || null); // Port#error must be polyfilled for non-gecko
 		this.port.onMessage.addListener(this.onMessage);
 		this.port.onDisconnect.addListener(this.onDisconnect);
 	}
@@ -129,6 +134,7 @@ function getPrivate(other) {
 
 // private implementation class
 class _Port {
+
 	constructor(self, port, Adapter) {
 		this.port = new Adapter(port, this.onData.bind(this), this.destroy.bind(this));
 		this.requests = new Map; // id ==> PromiseCapability
@@ -258,7 +264,7 @@ class _Port {
 		}
 	}
 	isRequest() {
-		switch (this._isRequest << 0) {
+		switch (this._isRequest) {
 			case -1: return false;
 			case +1: return true;
 		}
@@ -268,14 +274,12 @@ class _Port {
 		const id = this.cb2id.get(cb); if (!id) { return; }
 		this.id2cb.delete(id); this.cb2id.delete(cb);
 	}
-	destroy() {
+	destroy(error) {
 		if (!this.public) { return; }
 		this.endQueue.forEach(([ name, args, ]) => this.onData(name, 0, args));
 		this.requests.forEach(_=>_.reject(new Error('The Port this request is waiting on was destroyed')));
-		this.requests.clear();
-		this.handlers.clear();
-		this.id2cb.clear();
-		this.onEnd(true); this.ended = true;
+		this.requests.clear(); this.handlers.clear(); this.id2cb.clear();
+		this.onEnd(typeof error === 'object' ? Object.freeze(error) : null); this.ended = true;
 		try { this.port.destroy(); } catch (error) { console.error(error); }
 		this.public = this.port = null;
 	}
@@ -350,8 +354,8 @@ class _Port {
 			return false;
 		} }
 	}
-}
-const methods = _Port.prototype;
+
+} const methods = _Port.prototype;
 
 const getRandomId = global.crypto
 ? () => Array.from(global.crypto.getRandomValues(new Uint32Array(3)), _=>_.toString(32)).join('')
