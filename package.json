@@ -1,27 +1,36 @@
 {
 	"name": "multiport",
 	"description": "High level RPC connection Ports wrapping around all kinds of JavaScript message channels",
-	"version": "0.2.3",
+	"version": "0.3.0",
 	"author": "Niklas Gollenstede",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/NiklasGollenstede/multiport"
 	},
+	"main": "index.js",
+	"module": "index.esm.js",
 	"dependencies": {},
 	"devDependencies": {
-		"chai": "3.5.0",
-		"chai-as-promised": "5.3.0",
-		"mocha": "2.5.3",
-		"babel-eslint": "7.1.1",
-		"eslint": "3.14.1",
-		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
+		"chai": "^3.5.0",
+		"chai-as-promised": "^5.3.0",
+		"mocha": "^8.4.0",
+		"eslintrc": "github:NiklasGollenstede/eslintrc#de4265f",
+		"@typescript-eslint/eslint-plugin": "^4.1.1",
+		"typescript": "^4.2.4",
+		"ghooks": "^2.0.4"
 	},
 	"scripts": {
 		"test": "mocha --require test/node",
-		"lint": "eslint --ignore-path .gitignore ."
+		"lint": "eslintrc --color --ignore-path .gitignore . && tsc -p jsconfig.json"
+	},
+	"config": {
+		"ghooks": {
+			"pre-commit": "npm run lint --silent"
+		}
 	},
 	"eslintConfig": {
-		"extends": "./node_modules/eslintrc/browser.js"
+		"extends": "./node_modules/eslintrc/general.js",
+		"root": true
 	}
 }

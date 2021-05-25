@@ -1,10 +1,7 @@
 (function(global) { 'use strict'; const factory = function Multiport(exports) { // license: MIT
+// @ts-nocheck
 
-/**
- * for documentation, see ./README.md or https://github.com/NiklasGollenstede/multiport/blob/master/README.md
- */
-
-// public interface class
+/** @deprecated Use the ESM version instead! */
 const Port = class Port {
 	constructor(port, Adapter) { new _Port(this, port, Adapter); }
 
@@ -19,7 +16,7 @@ const Port = class Port {
 
 	get ended() { const self = Self.get(this); if (!self) { throw new Error(`Port method used on invalid object`); } return self.ended; }
 	isRequest() { return getPrivate(this).isRequest(); }
-	releaseCallback(func) { getPrivate(this).releaseCallback(func); return this; }
+	releaseCallback(func) { getPrivate(this).releaseCallback(func, false); return this; }
 	destroy(reason) { try { const self = Self.get(this); self && self.destroy(reason); } catch (error) { reportError(error); } }
 };
 
@@ -270,9 +267,10 @@ class _Port {
 		}
 		throw new Error(`Port.isRequest() may only be called while the port is in a synchronous handler`);
 	}
-	releaseCallback(cb) {
-		const id = this.cb2id.get(cb); if (!id) { return; }
-		this.id2cb.delete(id); this.cb2id.delete(cb);
+	releaseCallback(callback, remote) {
+		const cbId = this.cb2id.get(callback); if (!cbId) { return; }
+		this.id2cb.delete(cbId); this.cb2id.delete(callback);
+		!remote && this.port.send('', 0, [ 0, 2, cbId, ], null);
 	}
 	destroy(error) {
 		if (!this.public) { return; }
@@ -296,6 +294,10 @@ class _Port {
 						value = callback.apply(null, args[3].map(this.unmapValue, this));
 					} break;
 					case 1: { // end Queue
+						this.endQueue.push([ args[2], args[3], ]);
+						return false;
+					}
+					case 2: { // callback release
 						this.endQueue.push([ args[2], args[3], ]);
 						return false;
 					}
