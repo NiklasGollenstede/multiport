@@ -1,7 +1,7 @@
 {
 	"name": "multiport",
 	"description": "High level RPC connection Ports wrapping around all kinds of JavaScript message channels",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"author": "Niklas Gollenstede",
 	"license": "MIT",
 	"repository": {

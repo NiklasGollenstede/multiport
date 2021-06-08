@@ -6,7 +6,7 @@
 /// @ts-check
 
 /**
- * @typedef {() => Promise<any>|any} Handler - Message handler function.
+ * @typedef {(this: any, ...args: any[]) => Promise<any>|any} Handler - Message handler function.
  */
 
 /**
@@ -83,20 +83,20 @@ export class Port {
 
 	/**
 	 * Calls a handler on the other end of this port and returns a Promise to its return value.
-	 * @param  {object}  options  Optional, may be omitted.
-	 *                            If specified, it will be passed as 4th argument to PortAdapter.send().
-	 * @param  {string}  name     Name of the remote handler to call.
-	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
-	 * @return {Promise<any>}     Promise that rejects if the request wasn't handled or if the handler
-	 *                            threw and otherwise resolves to the handlers return value.
+	 * @param  {object?}   options  Optional, may be omitted.
+	 *                              If specified, it will be passed as 4th argument to PortAdapter.send().
+	 * @param  {string}    name     Name of the remote handler to call.
+	 * @param  {...any[]}  args     Additional arguments whose JSON-clones are passed to the remote handler.
+	 * @return {Promise<any>}       Promise that rejects if the request wasn't handled or if the handler
+	 *                              threw and otherwise resolves to the handlers return value.
 	 */
-	request(options, name, args) { return methods.request.call(getPrivate(this), options, name, args); }
+	request(options, name, ...args) { return methods.request.call(getPrivate(this), options, name, ...args); }
 
 
 	/**
 	 * Calls a handler on the other end of this port without waiting for its return value
 	 * and without guarantee that a handler has in fact been called.
-	 * @param  {object}  options  Optional, may be omitted.
+	 * @param  {object?} options  Optional, may be omitted.
 	 *                            If specified, it will be passed as 4th argument to PortAdapter.send().
 	 * @param  {string}  name     Name of the remote handler to call.
 	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
@@ -245,7 +245,7 @@ export class MessagePort extends PortAdapter {
 } Port.MessagePort = MessagePort;
 
 /** `PortAdapter` for browser node.js native `Stream`s. */
-class node_Stream extends PortAdapter {
+export class node_Stream extends PortAdapter {
 
 	constructor(port, onData, onEnd) { super(port, onData, onEnd);
 		this.port = port;
@@ -274,14 +274,15 @@ class node_Stream extends PortAdapter {
 } Port.node_Stream = node_Stream;
 
 /** `PortAdapter` for browser WebExtension `Port` objects. */
-class web_ext_Port extends PortAdapter {
+export class web_ext_Port extends PortAdapter {
 
 	constructor(port, onData, onEnd) { super(port, onData, onEnd);
 		this.port = port;
-		this.onMessage = data => onData(data[0], data[1], JSON.parse(data[2]));
+		this.onMessage = data => onData(data[0], data[1], JSON.parse(data[2]), this.altThis);
 		this.onDisconnect = () => onEnd(port.error || null); // Port#error must be polyfilled for non-gecko
 		this.port.onMessage.addListener(this.onMessage);
 		this.port.onDisconnect.addListener(this.onDisconnect);
+		this.altThis = { onDisconnect: port.onDisconnect, sender: port.sender, };
 	}
 
 	send(name, id, args) {
@@ -303,6 +304,9 @@ class web_ext_Port extends PortAdapter {
 	}
 } Port.web_ext_Port = web_ext_Port;
 
+
+/// implementation
+
 // holds references between public interface and private implementation
 const Self = /**@type{WeakMap<Port, _Port>}*/(new WeakMap);
 
@@ -312,9 +316,6 @@ function getPrivate(other) {
 	if (!self.public) { throw new Error(`Can't use disconnected Port`); }
 	return self;
 }
-
-
-/// implementation
 
 class _Port {
 
